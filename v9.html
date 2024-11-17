@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LDL Reduction Probability Estimation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Montserrat', sans-serif; background-color: #f0f8ff; color: #333; }
+        .container { max-width: 700px; margin: auto; padding: 30px; text-align: center; background-color: #ffffff; border-radius: 8px; box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); }
+        h1 { color: #005b96; font-weight: 600; }
+        label { font-weight: 600; color: #004080; }
+        input { margin: 10px 0; padding: 10px; width: 80%; font-size: 16px; border: 1px solid #005b96; border-radius: 5px; }
+        button { padding: 10px 20px; margin: 10px 5px; background-color: #005b96; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; }
+        button:hover { background-color: #003f72; }
+        button:focus, input:focus { outline: 2px solid #005b96; }
+        .btn-container { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .posologies { display: none; margin-top: 10px; }
+        .result { margin-top: 20px; font-size: 16px; color: #333; text-align: left; padding: 15px; background-color: #f0f4fa; border-radius: 8px; white-space: pre-line; }
+        .chartContainer { margin-top: 30px; }
+        footer { margin-top: 30px; font-size: 12px; color: #555; text-align: center; }
+        .note { font-size: 12px; color: #666; margin-top: -10px; margin-bottom: 10px; font-style: italic; text-align: center; }
+        .asterisk { color: #007bff; font-weight: bold; margin-left: 3px; } /* Couleur modifiée en bleu discret */
+
+    </style>
+</head>
+<body>
+    <div class="container" role="main">
+        <h1>LDL Reduction Probability Estimation</h1>
+
+        <label for="unitSelect">Select Unit<span class="asterisk">*</span>:</label>
+        <select id="unitSelect" aria-required="true" onchange="updateLDLOptions()">
+            <option value="g/L">g/L (default)</option>
+            <option value="mmol/L">mmol/L</option>
+            <option value="mg/dL">mg/dL</option>
+        </select><br><br><br>
+        
+       <label for="ldlInitial">Initial LDL Level (Without any lipid lowering therapy)<span class="asterisk">*</span>:</label>
+<input type="number" id="ldlInitial" step="0.01" aria-required="true"> <br>
+
+
+        <label for="ldlObjective">Target LDL Level<span class="asterisk">*</span>:</label>
+        <input type="number" id="ldlObjective" list="ldlOptions" step="0.01" aria-required="true" aria-describedby="ldlObjectiveHelp">
+        <datalist id="ldlOptions">
+            <option value="1.0"></option>
+            <option value="0.7"></option>
+            <option value="0.55"></option>
+            <option value="0.4"></option>
+        </datalist>
+        <p id="ldlObjectiveHelp" class="note">* Both values must be entered in the same unit: g/L, mmol/L, or mg/dL.</p>
+
+        <div class="btn-container">
+            <button onclick="showAll()" aria-label="Estimate probability of reaching LDL target" tabindex="0">ESTIMATE</button>
+        </div>
+
+        <div id="posologiesContainer" class="posologies"></div>
+        <div class="result" id="result" aria-live="polite"></div>
+        <button id="ezetimibButton" onclick="calculateWithEzetimib()" style="display: none;" aria-label="Add Ezetimib to estimate the effect">Add Ezetimib</button>
+        <button id="removeEzetimibButton" onclick="removeEzetimib()" style="display: none;" aria-label="Remove Ezetimib from estimation">Remove Ezetimib</button>
+
+        <!-- Chart containers -->
+        <div id="chartContainerRosuvastatine" class="chartContainer" aria-label="Chart showing the probability of reaching LDL target using Rosuvastatine at different dosages"></div>
+        <div id="chartContainerAtorvastatine" class="chartContainer" aria-label="Chart showing the probability of reaching LDL target using Atorvastatine at different dosages"></div>
+        <div id="chartContainerSimvastatine" class="chartContainer" aria-label="Chart showing the probability of reaching LDL target using Simvastatine at different dosages"></div>
+    </div>
+
+    <footer>
+        *This application does not replace the clinical judgment and is designed to help the physician to refine the patient-centered care decision process,
+        particularly in the setting of primary prevention. It does not reflect the opinion of their designers but is based on published scientific data (1).
+        Estimations were based on published data on variability of low-density lipoprotein cholesterol response (1). Since values were not strictly Gaussian,
+        estimations based on mean values +/- SD were not always appropriate (deviation > 10% between estimated and observed values), and a more stringent
+        method was required. Data were generated by visual extractions of each waterfall plot. Data were manually extracted on the available internet app
+        (https://plotdigitizer.com/) to generate samples of at least 50 points. Then, polynomial equations were developed from each sample table
+        (https://stats.blue/Stats_Suite/polynomial_regression_calculator.html). Regressions with a R>0,98 were considered as consistent enough and each formula
+        was applied for each statin drug at each dosage (12 tables in total). Then, expected reductions in LDL concentration (y-axis) were calculated for each rank
+        (x-axis, from 1 to 100) for each drug and each dosage (12 new generated tables). The probability of LDL goal attainment was defined as 100 minus the
+        x-rank corresponding the most to the expected LDL decrease threshold (y-axis).
+
+        Concerning ezetimibe estimations, we hypothesized that for reaching LDL goal with ezetimibe, the awaited goal with statin alone would be 25% higher than
+        the one with ezetimibe combination (arbitrary 20% additional reduction of LDL with ezetimibe). This assumption has the limitation of potential
+        inter-individual variability of ezetimibe response. This may induce some minor biases in estimations of the combined therapy.
+
+        (1)    Karlson et al, Eur Heart J Cardiovasc Pharmacother. 2016 Oct;2(4):212-7
+    </footer>
+
+    <script>
+        function updateLDLOptions() {
+            const unitSelect = document.getElementById('unitSelect').value;
+            const ldlOptions = document.getElementById('ldlOptions');
+            ldlOptions.innerHTML = '';
+
+            let options = [];
+            if (unitSelect === 'g/L') {
+                options = [1.0, 0.7, 0.55, 0.4];
+            } else if (unitSelect === 'mmol/L') {
+                options = [2.6, 1.8, 1.4, 1.0];
+            } else if (unitSelect === 'mg/dL') {
+                options = [100, 70, 55, 40];
+            }
+
+            options.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                ldlOptions.appendChild(option);
+            });
+        }
+
+
+ const dataVectors = {
+'rosuvastatine_5_mg': [
+    6.0234, 0.584559583, -4.237860018, -8.498100599, -12.2470961, -15.53259787, -18.39929763, -20.88894832, -23.04048261,
+    -24.89012929, -26.47152732, -27.81583779, -28.95185353, -29.90610659, -30.70297341, -31.36477784, -31.91189193,
+    -32.3628344, -32.73436702, -33.04158866, -33.2980272, -33.51572911, -33.70534693, -33.87622441, -34.03647951,
+    -34.19308513, -34.35194763, -34.51798311, -34.6951915, -34.88672839, -35.09497464, -35.32160378, -35.5676472,
+    -35.83355705, -36.11926701, -36.42425072, -36.74757812, -37.08796945, -37.44384707, -37.81338507, -38.19455664,
+    -38.5851792, -38.98295735, -39.38552353, -39.79047651, -40.19541763, -40.59798482, -40.99588442, -41.38692071,
+    -41.76902329, -42.1402722, -42.49892077, -42.84341639, -43.17241884, -43.48481661, -43.77974084, -44.05657712,
+    -44.31497502, -44.55485543, -44.77641567, -44.98013231, -45.1667619, -45.3373393, -45.49317398, -45.63584391,
+    -45.76718736, -45.88929241, -46.00448425, -46.11531024, -46.22452279, -46.33505999, -46.45002397, -46.5726571,
+    -46.70631595, -46.85444301, -47.0205362, -47.20811611, -47.42069111, -47.66172012, -47.93457327, -48.24249023,
+    -48.58853639, -48.97555677, -49.40612775, -49.88250652, -50.40657834, -50.97980161, -51.60315059, -52.27705608,
+    -53.0013437, -53.77517003, -54.59695656, -55.46432133, -56.37400838, -57.32181502, -58.3025168, -59.3097903,
+    -60.33613371, -61.37278513, -62.40963867, -63.43515839
+],
+'rosuvastatine_10_mg': [
+    11.6445, 7.133856539, 2.971482473, -0.864513819, -4.395125193, -7.64046364, -10.61977819, -13.35147283, -15.85312439,
+    -18.14150044, -20.23257723, -22.14155757, -23.8828887, -25.47028029, -26.91672223, -28.23450261, -29.4352256,
+    -30.52982937, -31.52860394, -32.44120917, -33.27669259, -34.04350733, -34.74953004, -35.40207878, -36.0079309,
+    -36.573341, -37.10405877, -37.60534696, -38.08199922, -38.53835804, -38.97833266, -39.40541696, -39.82270734,
+    -40.23292069, -40.63841221, -41.04119341, -41.4429499, -41.84505941, -42.24860961, -42.65441605, -43.06304006,
+    -43.47480664, -43.8898224, -44.30799342, -44.72904317, -45.15253044, -45.57786719, -46.00433653, -46.43111052,
+    -46.8572682, -47.28181337, -47.70369259, -48.12181302, -48.53506036, -48.94231676, -49.34247868, -49.73447484,
+    -50.1172841, -50.48995336, -50.85161549, -51.2015072, -51.53898699, -51.86355299, -52.17486093, -52.472742,
+    -52.75722075, -53.02853305, -53.28714393, -53.53376551, -53.76937492, -53.99523216, -54.21289806, -54.42425213,
+    -54.63151052, -54.83724387, -55.04439524, -55.25629802, -55.47669382, -55.70975039, -55.96007949, -56.23275483,
+    -56.53332998, -56.86785623, -57.24290053, -57.66556338, -58.14349675, -58.68492195, -59.29864758, -59.99408738,
+    -60.78127819, -61.67089783, -62.67428297, -63.80344709, -65.07109836, -66.49065754, -68.07627588, -69.84285304,
+    -71.80605499, -73.98233189, -76.38893604, -79.04393974
+],
+
+'rosuvastatine_20_mg': [
+    13.2124, 6.680033481, 0.730354827, -4.674322967, -9.570170642, -13.99187154, -17.97265047, -21.5443026, -24.7372223,
+    -27.58043206, -30.1016113, -32.32712528, -34.28205398, -35.99022096, -37.47422222, -38.75545507, -39.85414705,
+    -40.78938473, -41.57914264, -42.24031211, -42.78873017, -43.23920838, -43.60556173, -43.90063754, -44.13634425,
+    -44.32368039, -44.47276337, -44.5928584, -44.69240735, -44.77905763, -44.85969103, -44.94045262, -45.02677963,
+    -45.12343029, -45.23451275, -45.36351388, -45.51332823, -45.68628681, -45.88418605, -46.1083166, -46.35949226,
+    -46.6380788, -46.94402286, -47.27688083, -47.6358477, -48.01978596, -48.42725443, -48.85653716, -49.30567232,
+    -49.77248104, -50.25459628, -50.74949171, -51.25451063, -51.76689474, -52.28381312, -52.80239101, -53.31973876,
+    -53.83298065, -54.33928378, -54.83588693, -55.32012947, -55.78948017, -56.24156614, -56.67420164, -57.08541699,
+    -57.47348745, -57.83696204, -58.17469248, -58.48586201, -58.77001429, -59.02708225, -59.25741697, -59.46181659,
+    -59.64155511, -59.79841133, -59.93469766, -60.05328906, -60.15765186, -60.25187263, -60.3406871, -60.429509,
+    -60.52445891, -60.63239318, -60.76093277, -60.91849212, -61.11430806, -61.35846862, -61.66194197, -62.03660522,
+    -62.49527338, -63.05172814, -63.72074679, -64.51813111, -65.4607362, -66.56649938, -67.85446903, -69.34483352,
+    -71.05895002, -73.0193734, -75.24988511, -77.77552205
+],
+
+'rosuvastatine_40_mg': [
+    4.8716, -1.885646492, -8.011786493, -13.54886246, -18.53718865, -23.01538454, -27.02040827, -30.58759003, -33.75066548,
+    -36.5418092, -38.99166809, -41.12939479, -42.98268111, -43.57779144, -44.13959617, -44.79160511, -45.25600092,
+    -45.85367252, -46.60424852, -47.02613063, -48.23652707, -48.95148603, -49.68592903, -51.1536844, -51.26752066,
+    -51.33917997, -51.3794115, -51.39800492, -51.40382375, -51.40483884, -51.40816176, -51.42007821, -52.04608145,
+    -52.89090574, -53.55855974, -53.85235993, -54.07496402, -54.92840441, -55.11412156, -55.53299744, -55.88538895,
+    -56.07116132, -56.68972157, -57.14005187, -57.420743, -57.73002779, -57.96581449, -58.2257202, -58.70710434,
+    -58.90710201, -59.02265744, -59.25055738, -59.78746459, -59.82995117, -59.87453204, -59.91769835, -59.95595089,
+    -60.4858335, -61.00396651, -61.50708017, -61.99204802, -62.45592038, -62.89595771, -63.30966405, -63.69482046,
+    -64.04951842, -64.37219323, -64.66165749, -64.91713446, -65.1382915, -65.32527351, -65.47873632, -65.59988013,
+    -65.69048291, -65.75293386, -65.79026678, -65.80619351, -65.80513739, -65.79226659, -65.77352761, -65.7556787,
+    -65.7463232, -65.75394304, -65.78793215, -65.85862984, -65.97735424, -66.15643574, -66.40925038, -66.75025329,
+    -67.19501211, -67.76024038, -68.46383101, -69.32488966, -70.36376818, -71.602098, -73.0628236, -74.7702359,
+    -76.75000567, -79.02921698, -81.63640058, -84.60156737
+],
+
+'atorvastatine_10_mg': [
+    8.3202, 6.00442441, 3.76777524, 1.60879863, -0.47395928, -2.48195235, -4.41663444, -6.27945941, -8.07188112,
+    -9.79535343, -11.4513302, -13.04126529, -14.56661256, -16.02882587, -17.42935908, -18.76966605, -20.05120064,
+    -21.27541671, -22.44376812, -23.55770873, -24.6186924, -25.62817299, -26.58760436, -27.49844037, -28.36213488,
+    -29.18014175, -29.95391484, -30.68490801, -31.37457512, -32.02437003, -32.6357466, -33.21015869, -33.74906016,
+    -34.25390487, -34.72614668, -35.16723945, -35.57863704, -35.96179331, -36.31816212, -36.64919733, -36.9563528,
+    -37.24108239, -37.50483996, -37.74907937, -37.97525448, -38.18481915, -38.37922724, -38.55993261, -38.72838912,
+    -38.88605063, -39.034371, -39.17480409, -39.30880376, -39.43782387, -39.56331828, -39.68674085, -39.80954544,
+    -39.93318591, -40.05911612, -40.18878993, -40.3236612, -40.46518379, -40.61481156, -40.77399837, -40.94419808,
+    -41.12686455, -41.32345164, -41.53541321, -41.76420312, -42.01127523, -42.2780834, -42.56608149, -42.87672336,
+    -43.21146287, -43.57175388, -43.95905025, -44.37480584, -44.82047451, -45.29751012, -45.80736653, -46.3514976,
+    -46.93135719, -47.54839916, -48.20407737, -48.89984568, -49.63715795, -50.41746804, -51.24222981, -52.11289712,
+    -53.03092383, -53.9977638, -55.01487089, -56.08369896, -57.20570187, -58.38233348, -59.61504765, -60.90529824,
+    -62.25453911, -63.66422412, -65.13580713, -66.670742
+],
+
+'atorvastatine_20_mg': [
+    9.3211, 3.712641647, -1.381640962, -5.995962634, -10.16312456, -13.91454188, -17.28027127, -20.28903852, -22.96826609,
+    -25.34410073, -27.441441, -29.28396488, -30.89415734, -32.29333791, -33.50168828, -34.53827983, -35.42110124,
+    -36.16708608, -36.79214034, -37.31117004, -37.7381088, -38.08594541, -38.3667514, -38.59170863, -38.77113688,
+    -38.91452138, -39.03054042, -39.12709293, -39.21132603, -39.28966263, -39.367829, -39.45088233, -39.54323833,
+    -39.64869879, -39.77047916, -39.91123613, -40.0730952, -40.25767826, -40.46613116, -40.69915131, -40.9570152,
+    -41.23960606, -41.54644135, -41.87670039, -42.22925192, -42.60268168, -42.99531997, -43.40526926, -43.83043173,
+    -44.26853686, -44.717169, -45.17379499, -45.63579165, -46.10047343, -46.56511996, -47.02700363, -47.48341715,
+    -47.93170115, -48.36927174, -48.79364809, -49.20248001, -49.59357551, -49.96492842, -50.31474591, -50.64147608,
+    -50.94383558, -51.22083713, -51.47181712, -51.69646319, -51.8948418, -52.06742581, -52.21512204, -52.33929888,
+    -52.44181383, -52.52504108, -52.59189913, -52.64587831, -52.69106836, -52.73218608, -52.77460279, -52.82437201,
+    -52.88825697, -52.97375822, -53.08914119, -53.24346377, -53.44660388, -53.70928708, -54.04311409, -54.46058841,
+    -54.97514386, -55.60117221, -56.3540507, -57.25016963, -58.30695999, -59.54292093, -60.97764743, -62.63185786,
+    -64.5274215, -66.68738617, -69.13600581, -71.89876801
+],
+
+'atorvastatine_40_mg': [
+    11.1791, 1.468796872, -6.664294315, -13.42412958, -18.99517364, -23.543703, -27.21905428, -30.15481868, -32.46998386,
+    -34.27002421, -35.64794076, -36.68525158, -37.45293416, -38.01232043, -38.41594592, -38.70835389, -38.92685564,
+    -39.10224816, -39.25949007, -39.41833713, -39.59393829, -39.79739342, -40.03627389, -40.31510698, -40.63582534,
+    -40.99818258, -41.40013599, -41.83819762, -42.30775482, -42.80336123, -43.31899941, -43.84831625, -44.38483216,
+    -44.92212521, -45.45399134, -45.97458163, -46.47851796, -46.96098786, -47.41781996, -47.84554089, -48.2414149,
+    -48.60346724, -48.9304924, -49.22204833, -49.47843775, -49.70067759, -49.8904578, -50.05009048, -50.18245053,
+    -50.29090892, -50.37925957, -50.45164119, -50.51245486, -50.56627872, -50.61778081, -50.671631, -50.73241334,
+    -50.80453985, -50.89216677, -50.99911449, -51.12879223, -51.28412849, -51.46750856, -51.68071998, -51.92490717,
+    -52.20053641, -52.50737202, -52.84446517, -53.21015611, -53.60209121, -54.01725566, -54.45202314, -54.90222337,
+    -55.36322888, -55.83006187, -56.29752238, -56.76033889, -57.21334243, -57.6516652, -58.07096506, -58.46767668,
+    -58.83929071, -59.1846619, -59.50434743, -59.80097634, -60.07965145, -60.34838459, -60.61856641, -60.90547187,
+    -61.22880242, -61.61326608, -62.0891964, -62.69321161, -63.4689148, -64.46763643, -65.74922018, -67.38285335,
+    -69.44794272, -72.03503717, -75.2467981, -79.19901865
+],
+
+'atorvastatine_80_mg': [
+    10.6588, 4.669068822, -0.818580331, -5.836032054, -10.41388441, -14.58147378, -18.36689975, -21.79704997, -24.897625,
+    -27.69316318, -30.20706551, -32.46162051, -34.47802906, -36.27642929, -37.87592145, -39.29459273, -40.54954217,
+    -41.65690552, -42.63188006, -43.48874953, -44.24090894, -44.90088946, -45.48038327, -45.99026843, -46.44063377,
+    -46.84080369, -47.19936311, -47.52418224, -47.82244153, -48.10065647, -48.3647025, -48.61983983, -48.87073836,
+    -49.12150247, -49.37569597, -49.63636688, -49.90607236, -50.18690354, -50.48051039, -50.78812658, -51.11059437,
+    -51.44838942, -51.80164572, -52.17018041, -52.55351865, -52.95091849, -53.36139574, -53.78374882, -54.21658365,
+    -54.65833848, -55.10730876, -55.56167203, -56.01951277, -56.47884725, -56.93764841, -57.39387071, -57.84547503,
+    -58.29045349, -58.72685432, -59.15280675, -59.56654587, -59.96643746, -60.3510029, -60.71894399, -61.06916785,
+    -61.40081176, -61.71326805, -62.00620893, -62.27961138, -62.53378201, -62.7693819, -62.98745152, -63.18943551,
+    -63.37720763, -63.55309557, -63.71990583, -63.88094859, -64.04006255, -64.20163985, -64.37065084, -64.55266906,
+    -64.75389599, -64.981186, -65.24207117, -65.54478617, -65.89829311, -66.31230644, -66.79731776, -67.36462071,
+    -68.02633586, -68.79543553, -69.68576868, -70.71208576, -71.8900636, -73.23633025, -74.76848982, -76.50514742,
+    -78.46593394, -80.67153097, -83.14369565, -85.90528552
+],
+
+'simvastatine_10_mg': [
+    14.1746, 10.37650637, 6.894750988, 3.709223378, 0.800618314, -1.849579608, -4.259111374, -6.444958962, -8.423360747,
+    -10.20982691, -11.81915485, -13.26544458, -14.56211416, -15.72191506, -16.75694763, -17.67867645, -18.49794578,
+    -19.22499492, -19.86947369, -20.44045777, -20.94646414, -21.39546648, -21.79491058, -22.15172976, -22.47236026,
+    -22.76275664, -23.02840722, -23.27434946, -23.5051854, -23.72509701, -23.93786167, -24.14686752, -24.35512889,
+    -24.56530172, -24.77969896, -25.00030596, -25.2287959, -25.46654519, -25.71464887, -25.97393603, -26.24498524,
+    -26.52813989, -26.82352368, -27.13105595, -27.45046715, -27.78131423, -28.12299602, -28.47476869, -28.83576109,
+    -29.20499024, -29.58137665, -29.96375981, -30.35091354, -30.74156143, -31.13439222, -31.52807523, -31.92127578,
+    -32.31267057, -32.70096308, -33.08489902, -33.4632817, -33.83498747, -34.19898109, -34.55433117, -34.90022556,
+    -35.23598678, -35.56108739, -35.87516543, -36.17803982, -36.46972578, -36.75045019, -37.02066706, -37.28107291,
+    -37.53262217, -37.77654259, -38.01435066, -38.24786703, -38.47923187, -38.71092033, -38.94575792, -39.18693592,
+    -39.4380268, -39.70299962, -39.98623543, -40.29254269, -40.62717269, -40.99583491, -41.40471249, -41.8604776,
+    -42.37030684, -42.94189669, -43.58347888, -44.30383581, -45.11231595, -46.01884928, -47.03396265, -48.16879523,
+    -49.43511389, -50.84532862, -52.41250794, -54.1503943
+],
+'simvastatine_20_mg': [
+    15.0102, 10.88564791, 7.093539744, 3.612634363, 0.42256187, -2.496193563, -5.162310902, -7.593649443, -9.807266006,
+    -11.81943214, -13.6456513, -15.30067606, -16.79852532, -18.15250147, -19.37520759, -20.4785647, -21.47382887,
+    -22.37160849, -23.18188141, -23.9140122, -24.57676927, -25.17834213, -25.72635854, -26.22790175, -26.68952766,
+    -27.11728202, -27.51671764, -27.89291159, -28.25048238, -28.59360716, -28.92603893, -29.2511237, -29.57181773,
+    -29.8907047, -30.21001292, -30.53163251, -30.85713261, -31.18777856, -31.52454911, -31.86815363, -32.21904926,
+    -32.57745817, -32.94338467, -33.31663251, -33.69682199, -34.08340719, -34.47569317, -34.87285318, -35.2739458,
+    -35.67793219, -36.08369328, -36.49004693, -36.89576518, -37.29959138, -37.70025745, -38.09650104, -38.48708274,
+    -38.87080326, -39.24652065, -39.61316746, -39.96976798, -40.3154554, -40.64948904, -40.97127151, -41.28036591,
+    -41.57651308, -41.85964871, -42.12992061, -42.38770585, -42.63362802, -42.86857435, -43.09371297, -43.31051006,
+    -43.52074709, -43.72653798, -43.93034629, -44.13500248, -44.34372101, -44.56011762, -44.78822648, -45.03251741,
+    -45.29791304, -45.58980605, -45.91407634, -46.27710824, -46.68580769, -47.14761945, -47.67054428, -48.26315615,
+    -48.93461945, -49.69470614, -50.55381301, -51.52297879, -52.61390145, -53.83895531, -55.21120827, -56.74443901,
+    -58.4531542, -60.35260564, -62.45880751, -64.78855356
+],
+
+
+'simvastatine_40_mg': [
+    5.689038, 1.081366053, -3.101948403, -6.889709327, -10.30950953, -13.38775463, -16.14968706, -18.61941003, -20.81991149,
+    -22.77308813, -24.49976932, -26.01974113, -27.35177028, -28.51362813, -29.52211463, -30.39308232, -31.1414603,
+    -31.78127821, -32.32569019, -32.78699888, -33.17667938, -33.50540321, -33.78306235, -34.01879312, -34.22100023,
+    -34.39738075, -34.55494803, -34.70005576, -34.83842186, -34.97515253, -35.11476617, -35.2612174, -35.41792099,
+    -35.58777588, -35.77318913, -35.97609991, -36.19800347, -36.43997509, -36.70269412, -36.98646788, -37.29125571,
+    -37.61669288, -37.96211461, -38.32658002, -38.70889613, -39.10764182, -39.5211918, -39.9477406, -40.38532655,
+    -40.83185574, -41.28512599, -41.74285087, -42.20268361, -42.66224115, -43.11912804, -43.57096047, -44.01539023,
+    -44.45012869, -44.87297076, -45.28181889, -45.67470701, -46.04982455, -46.40554039, -46.74042685, -47.05328364,
+    -47.34316186, -47.60938797, -47.85158777, -48.06971036, -48.26405214, -48.43528077, -48.58445913, -48.71306936,
+    -48.82303674, -48.91675374, -48.99710399, -49.0674862, -49.13183822, -49.19466093, -49.26104229, -49.33668126,
+    -49.42791182, -49.5417269, -49.6858024, -49.86852114, -50.09899685, -50.38709814, -50.74347245, -51.17957009,
+    -51.70766814, -52.3408945, -53.0932518, -53.97964142, -55.01588744, -56.21876064, -57.60600246, -59.19634897,
+    -61.00955486, -63.06641742, -65.3888005, -67.99965848
+],
+
+'simvastatine_80_mg': [
+    6.808833, 0.468826123, -5.16338303, -10.14825886, -14.54272017, -18.40026825, -21.77111278, -24.70229566, -27.23781253,
+    -29.4187323, -31.2833144, -32.8671239, -34.20314449, -35.32188931, -36.25150955, -37.01790097, -37.64480824,
+    -38.15392706, -38.56500423, -38.89593544, -39.16286099, -39.38025933, -39.56103839, -39.71662481, -39.857051,
+    -39.99103999, -40.12608821, -40.26854601, -40.42369609, -40.59582976, -40.78832099, -41.00369839, -41.24371493,
+    -41.50941558, -41.80120273, -42.11889951, -42.4618109, -42.82878269, -43.21825831, -43.62833345, -44.05680859,
+    -44.50123927, -44.95898431, -45.42725181, -45.90314295, -46.38369374, -46.86591452, -47.34682732, -47.82350109,
+    -48.29308473, -48.75283799, -49.20016017, -49.63261673, -50.04796369, -50.44416984, -50.81943686, -51.17221725,
+    -51.50123009, -51.80547463, -52.08424179, -52.33712338, -52.56401929, -52.7651424, -52.94102144, -53.09250161,
+    -53.22074308, -53.3272173, -53.41370119, -53.48226913, -53.53528283, -53.57537898, -53.60545482, -53.6286515,
+    -53.64833524, -53.66807646, -53.6916266, -53.72289287, -53.76591084, -53.82481479, -53.90380605, -54.00711898,
+    -54.13898498, -54.30359424, -54.50505531, -54.7473526, -55.03430162, -55.36950217, -55.75628922, -56.19768182,
+    -56.69632964, -57.25445757, -57.87380796, -58.55558082, -59.30037184, -60.10810821, -60.97798235, -61.90838338,
+    -62.89682655, -63.9398804, -65.03309182, -66.17090897
+]
+
+
+
+
+
+
+        };
+
+
+
+        let selectedPosologie = '';
+        let reductionObjective;
+        let charts = {};
+        let posologies = {};
+        let probabilitiesWithoutEzetimib = {};
+        let probabilitiesWithEzetimib = {};
+
+        function formatPosologieText(posologie) {
+            return posologie.replace(/_/g, ' ').replace(' mg', ' mg').replace(/\b\w/g, l => l.toUpperCase()).replace(' Mg', ' mg');
+        }
+
+        function showAll() {
+            const ldlInitial = parseFloat(document.getElementById('ldlInitial').value);
+            const ldlObjective = parseFloat(document.getElementById('ldlObjective').value);
+
+            if (isNaN(ldlInitial) || isNaN(ldlObjective)) {
+                alert('Please enter valid values for both LDL levels.');
+                return;
+            }
+
+            reductionObjective = ((ldlObjective - ldlInitial) * 100) / ldlInitial;
+            let allResults = 'Probability of reaching the target LDL level under:\n';
+
+            posologies = {};
+            probabilitiesWithoutEzetimib = {};
+
+            for (const posologie in dataVectors) {
+                const molecule = posologie.split('_')[0];
+                const probability = calculateProbability(posologie, reductionObjective);
+
+                allResults += `${formatPosologieText(posologie)}: ${probability}%\n`;
+
+                if (!posologies[molecule]) {
+                    posologies[molecule] = [];
+                    probabilitiesWithoutEzetimib[molecule] = [];
+                }
+
+                posologies[molecule].push(formatPosologieText(posologie));
+                probabilitiesWithoutEzetimib[molecule].push(probability);
+            }
+
+            document.getElementById('result').textContent = allResults;
+            document.getElementById('ezetimibButton').style.display = 'block';
+            document.getElementById('removeEzetimibButton').style.display = 'none';
+
+            selectedPosologie = 'all';
+
+            drawCharts(posologies, probabilitiesWithoutEzetimib, {});
+        }
+
+        function calculateWithEzetimib() {
+            const ldlInitial = parseFloat(document.getElementById('ldlInitial').value);
+            const ldlObjective = parseFloat(document.getElementById('ldlObjective').value);
+            const reductionObjectiveWithEzetimib = ((ldlObjective / 0.8 - ldlInitial) * 100) / ldlInitial;
+
+            probabilitiesWithEzetimib = {};
+
+            let allResultsWithEzetimib = 'Probability of reaching the target LDL level under:\n';
+
+            for (const posologie in dataVectors) {
+                const molecule = posologie.split('_')[0];
+                const probabilityWithoutEzetimib = calculateProbability(posologie, reductionObjective);
+                const probabilityWithEzetimib = calculateProbability(posologie, reductionObjectiveWithEzetimib);
+
+                allResultsWithEzetimib += `${formatPosologieText(posologie)}: ${probabilityWithoutEzetimib}%; with Ezetimib: ${probabilityWithEzetimib}%\n`;
+
+                if (!probabilitiesWithEzetimib[molecule]) {
+                    probabilitiesWithEzetimib[molecule] = [];
+                }
+
+                probabilitiesWithEzetimib[molecule].push(probabilityWithEzetimib);
+            }
+
+            document.getElementById('result').textContent = allResultsWithEzetimib;
+            drawCharts(posologies, probabilitiesWithoutEzetimib, probabilitiesWithEzetimib);
+            document.getElementById('ezetimibButton').style.display = 'none';
+            document.getElementById('removeEzetimibButton').style.display = 'block';
+        }
+
+        function removeEzetimib() {
+            let allResultsWithoutEzetimib = 'Probability of reaching the target LDL level under:\n';
+
+            for (const molecule in probabilitiesWithoutEzetimib) {
+                posologies[molecule].forEach((posology, index) => {
+                    allResultsWithoutEzetimib += `${posology}: ${probabilitiesWithoutEzetimib[molecule][index]}%\n`;
+                });
+            }
+
+            document.getElementById('result').textContent = allResultsWithoutEzetimib;
+            drawCharts(posologies, probabilitiesWithoutEzetimib, {});
+            document.getElementById('ezetimibButton').style.display = 'block';
+            document.getElementById('removeEzetimibButton').style.display = 'none';
+        }
+
+        function drawCharts(posologies, probabilitiesWithoutEzetimib, probabilitiesWithEzetimib) {
+            ['rosuvastatine', 'atorvastatine', 'simvastatine'].forEach(molecule => {
+                const container = document.getElementById(`chartContainer${capitalize(molecule)}`);
+                container.innerHTML = '';
+
+                const ctx = container.appendChild(document.createElement('canvas')).getContext('2d');
+
+                if (charts[molecule]) charts[molecule].destroy();
+
+                charts[molecule] = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: posologies[molecule],
+                        datasets: [
+                            {
+                                label: 'Without Ezetimib',
+                                data: probabilitiesWithoutEzetimib[molecule],
+                                backgroundColor: 'rgba(0, 123, 255, 0.7)',
+                            },
+                            ...(probabilitiesWithEzetimib[molecule] ? [{
+                                label: 'With Ezetimib',
+                                data: probabilitiesWithEzetimib[molecule],
+                                backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                            }] : [])
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                min: 0,
+                                max: 100,
+                                title: { display: true, text: 'Probability of Reaching LDL Target (%)' }
+                            }
+                        },
+                        plugins: {
+                            tooltip: { callbacks: { label: (context) => `${context.raw}%` } }
+                        }
+                    }
+                });
+            });
+        }
+
+        function calculateProbability(posologie, targetReduction) {
+            const values = dataVectors[posologie];
+            if (!values) {
+                alert('Data unavailable for this dosage.');
+                return 0;
+            }
+
+            let closestIndex = 0;
+            let closestDiff = Math.abs(values[0] - targetReduction);
+
+            for (let i = 1; i < values.length; i++) {
+                const diff = Math.abs(values[i] - targetReduction);
+                if (diff < closestDiff) {
+                    closestDiff = diff;
+                    closestIndex = i;
+                }
+            }
+            
+            return 100 - closestIndex;
+        }
+
+        function capitalize(string) { return string.charAt(0).toUpperCase() + string.slice(1); }
+    </script>
+</body>
+</html>
